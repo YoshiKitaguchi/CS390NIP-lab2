@@ -65,11 +65,11 @@ def contentLoss(content, gen):
     return K.sum(K.square(gen - content))
 
 
-def totalLoss(x):
-    a = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, 1:, :CONTENT_IMG_W - 1, :])
-    b = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, :CONTENT_IMG_W - 1, 1:, :])
-    return K.sum(K.pow(a + b, TOTAL_VARIATION_LOSS_FACTOR))
-    # return CONTENT_WEIGHT * x[0] + STYLE_WEIGHT * x[1]  #TODO: implement.
+def totalLoss(content, style, gen):
+    # a = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, 1:, :CONTENT_IMG_W - 1, :])
+    # b = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, :CONTENT_IMG_W - 1, 1:, :])
+    # return K.sum(K.pow(a + b, TOTAL_VARIATION_LOSS_FACTOR))
+    return CONTENT_WEIGHT * contentLoss(content, gen) + STYLE_WEIGHT * styleLoss(style, gen)  #TODO: implement.
 
 
 
@@ -131,7 +131,7 @@ def styleTransfer(cData, sData, tData):
         styleOutput = styleLayer[1, :, :, :]
         genStyleOutput = styleLayer[2, :, :, :]
         loss += (STYLE_WEIGHT / len(styleLayerNames)) * styleLoss(styleOutput, genStyleOutput)   #TODO: implement.
-    loss += TOTAL_VARIATION_WEIGHT * totalLoss(K.variable(tData))   #TODO: implement.
+    loss += TOTAL_VARIATION_WEIGHT * totalLoss(contentTensor, styleTensor, genTensor)   #TODO: implement.
     # TODO: Setup gradients or use K.gradients().
     outputs = [loss]
     outputs += K.gradients(loss, genTensor)
