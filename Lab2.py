@@ -36,8 +36,6 @@ TOTAL_WEIGHT = 1.0
 
 TRANSFER_ROUNDS = 3
 
-IMAGENET_MEAN_RGB_VALUES = [123.68, 116.779, 103.939]
-
 
 
 #=============================<Helper Fuctions>=================================
@@ -133,7 +131,7 @@ def styleTransfer(cData, sData, tData):
         styleOutput = styleLayer[1, :, :, :]
         genStyleOutput = styleLayer[2, :, :, :]
         loss += (STYLE_WEIGHT / len(styleLayerNames)) * styleLoss(styleOutput, genStyleOutput)   #TODO: implement.
-    loss += TOTAL_VARIATION_WEIGHT * totalLoss(genTensor)   #TODO: implement.
+    loss += TOTAL_VARIATION_WEIGHT * totalLoss(K.variable(tData))   #TODO: implement.
     # TODO: Setup gradients or use K.gradients().
     outputs = [loss]
     outputs += K.gradients(loss, genTensor)
