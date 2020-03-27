@@ -21,8 +21,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 CONTENT_IMG_PATH = r"C:\Users\Yoshi\Documents\GitHub\CS390NIP-lab2\city.jpg"           #TODO: Add this.
 STYLE_IMG_PATH = r"C:\Users\Yoshi\Documents\GitHub\CS390NIP-lab2\style.jpg"           #TODO: Add this.
 
-TOTAL_VARIATION_LOSS_FACTOR = 1.25
-TOTAL_VARIATION_WEIGHT = 0.995
+IMAGENET_MEAN_RGB_VALUES = [123.68, 116.779, 103.939]
 
 CONTENT_IMG_H = 500
 CONTENT_IMG_W = 500
@@ -30,11 +29,11 @@ CONTENT_IMG_W = 500
 STYLE_IMG_H = 500
 STYLE_IMG_W = 500
 
-CONTENT_WEIGHT = 0.1    # Alpha weight.
-STYLE_WEIGHT = 1.0      # Beta weight.
+CONTENT_WEIGHT = 0.3    # Alpha weight.
+STYLE_WEIGHT = 1.0     # Beta weight.
 TOTAL_WEIGHT = 1.0
 
-TRANSFER_ROUNDS = 3
+TRANSFER_ROUNDS = 1000
 
 
 
@@ -44,7 +43,12 @@ TODO: implement this.
 This function should take the tensor and re-convert it to an image.
 '''
 def deprocessImage(img):
-    img = img.reshape((CONTENT_IMG_H , CONTENT_IMG_W , TRANSFER_ROUNDS))
+    img = img.reshape((CONTENT_IMG_H , CONTENT_IMG_W , 3))
+    img = img[:, :, ::-1]
+    img[:, :, 0] += IMAGENET_MEAN_RGB_VALUES[2]
+    img[:, :, 1] += IMAGENET_MEAN_RGB_VALUES[1]
+    img[:, :, 2] += IMAGENET_MEAN_RGB_VALUES[0]
+    print (img[0][0])
     img = np.clip(img, 0, 255).astype("uint8")
     return img
 
@@ -65,11 +69,11 @@ def contentLoss(content, gen):
     return K.sum(K.square(gen - content))
 
 
-def totalLoss(content, style, gen):
+def totalLoss(x):
     # a = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, 1:, :CONTENT_IMG_W - 1, :])
     # b = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, :CONTENT_IMG_W - 1, 1:, :])
     # return K.sum(K.pow(a + b, TOTAL_VARIATION_LOSS_FACTOR))
-    return CONTENT_WEIGHT * contentLoss(content, gen) + STYLE_WEIGHT * styleLoss(style, gen)  #TODO: implement.
+    return TOTAL_WEIGHT * x  #TODO: implement.
 
 
 
@@ -97,6 +101,12 @@ def preprocessData(raw):
         img = imresize(img, (ih, iw, 3))
     img = img.astype("float64")
     img = np.expand_dims(img, axis=0)
+    # normalize the image
+    img[:, :, :, 2] -= IMAGENET_MEAN_RGB_VALUES[0]
+    img[:, :, :, 1]  -= IMAGENET_MEAN_RGB_VALUES[1]
+    img[:, :, :, 0]  -= IMAGENET_MEAN_RGB_VALUES[2]
+    img = img[:, :, :, ::-1]
+    # print (img)
     img = vgg19.preprocess_input(img)
     return img
 
@@ -131,16 +141,16 @@ def styleTransfer(cData, sData, tData):
         styleOutput = styleLayer[1, :, :, :]
         genStyleOutput = styleLayer[2, :, :, :]
         loss += (STYLE_WEIGHT / len(styleLayerNames)) * styleLoss(styleOutput, genStyleOutput)   #TODO: implement.
-    loss += TOTAL_VARIATION_WEIGHT * totalLoss(contentTensor, styleTensor, genTensor)   #TODO: implement.
+    loss += totalLoss(loss)   #TODO: implement.
     # TODO: Setup gradients or use K.gradients().
     outputs = [loss]
     outputs += K.gradients(loss, genTensor)
     print("   Beginning transfer.")
 
-    x = np.random.uniform(0, 255, (1, CONTENT_IMG_H , CONTENT_IMG_W, TRANSFER_ROUNDS)) - 128.
+    x = np.random.uniform(0, 255, (1, CONTENT_IMG_H , CONTENT_IMG_W, 3)) - 128.
 
     def evaluate_loss_and_gradients(x):
-        x = x.reshape((1, CONTENT_IMG_H, CONTENT_IMG_W, TRANSFER_ROUNDS))
+        x = x.reshape((1, CONTENT_IMG_H, CONTENT_IMG_W, 3))
         outs = K.function([genTensor], outputs)([x])
         loss = outs[0]
         gradients = outs[1].flatten().astype("float64")
@@ -163,10 +173,10 @@ def styleTransfer(cData, sData, tData):
         #TODO: perform gradient descent using fmin_l_bfgs_b.
         x, tLoss, info = fmin_l_bfgs_b(evaluator.loss, x.flatten(), fprime=evaluator.gradients, maxfun=20)
         print("      Loss: %f." % tLoss)
-        img = deprocessImage(x)
-        saveFile = "output.png"   #TODO: Implement.
-        imsave(saveFile, img)   #Uncomment when everything is working right.
-        print("      Image saved to \"%s\"." % saveFile)
+    img = deprocessImage(x)
+    saveFile = "output.png"   #TODO: Implement.
+    imsave(saveFile, img)   #Uncomment when everything is working right.
+    print("      Image saved to \"%s\"." % saveFile)
     print("   Transfer complete.")
 
 
