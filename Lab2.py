@@ -15,11 +15,11 @@ random.seed(1618)
 np.random.seed(1618)
 tf.set_random_seed(1618)
 
-tf.logging.set_verbosity(tf.logging.ERROR)
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-CONTENT_IMG_PATH = "https://www.economist.com/sites/default/files/images/print-edition/20180602_USP001_0.jpg"           #TODO: Add this.
-STYLE_IMG_PATH = "http://meetingbenches.com/wp-content/flagallery/tytus-brzozowski-polish-architect-and-watercolorist-a-fairy-tale-in-warsaw/tytus_brzozowski_13.jpg"             #TODO: Add this.
+CONTENT_IMG_PATH = r"C:\Users\Yoshi\Documents\GitHub\CS390NIP-lab2\city.jpg"           #TODO: Add this.
+STYLE_IMG_PATH = r"C:\Users\Yoshi\Documents\GitHub\CS390NIP-lab2\style.jpg"           #TODO: Add this.
 
 TOTAL_VARIATION_LOSS_FACTOR = 1.25
 TOTAL_VARIATION_WEIGHT = 0.995
@@ -36,6 +36,8 @@ TOTAL_WEIGHT = 1.0
 
 TRANSFER_ROUNDS = 3
 
+IMAGENET_MEAN_RGB_VALUES = [123.68, 116.779, 103.939]
+
 
 
 #=============================<Helper Fuctions>=================================
@@ -44,8 +46,7 @@ TODO: implement this.
 This function should take the tensor and re-convert it to an image.
 '''
 def deprocessImage(img):
-    img = img.reshape((IMAGE_HEIGHT, IMAGE_WIDTH, CHANNELS))
-    img = img[:, :, ::-1]
+    img = img.reshape((CONTENT_IMG_H , CONTENT_IMG_W , TRANSFER_ROUNDS))
     img = np.clip(img, 0, 255).astype("uint8")
     return img
 
@@ -68,7 +69,7 @@ def contentLoss(content, gen):
 
 def totalLoss(x):
     a = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, 1:, :CONTENT_IMG_W - 1, :])
-    b = K.square(x[:, :CONTENT_IMG_H - 1, :ICONTENT_IMG_W - 1, :] - x[:, :CONTENT_IMG_W - 1, 1:, :])
+    b = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, :CONTENT_IMG_W - 1, 1:, :])
     return K.sum(K.pow(a + b, TOTAL_VARIATION_LOSS_FACTOR))
     # return CONTENT_WEIGHT * x[0] + STYLE_WEIGHT * x[1]  #TODO: implement.
 
@@ -101,25 +102,6 @@ def preprocessData(raw):
     img = vgg19.preprocess_input(img)
     return img
 
-def evaluate_loss_and_gradients(x):
-    x = x.reshape((1, IMAGE_HEIGHT, IMAGE_WIDTH, CHANNELS))
-    outs = backend.function([combination_image], outputs)([x])
-    loss = outs[0]
-    gradients = outs[1].flatten().astype("float64")
-    return loss, gradients
-
-class Evaluator:
-
-    def loss(self, x):
-        loss, gradients = evaluate_loss_and_gradients(x)
-        self._gradients = gradients
-        return loss
-
-    def gradients(self, x):
-        return self._gradients
-
-evaluator = Evaluator()
-
 '''
 TODO: Allot of stuff needs to be implemented in this function.
 First, make sure the model is set up properly.
@@ -147,17 +129,37 @@ def styleTransfer(cData, sData, tData):
     loss += CONTENT_WEIGHT * contentLoss(contentOutput, genOutput)   #TODO: implement.
     print("   Calculating style loss.")
     for layerName in styleLayerNames:
-        styleLayer = layers[layerName]
+        styleLayer = outputDict[layerName]
         styleOutput = styleLayer[1, :, :, :]
         genStyleOutput = styleLayer[2, :, :, :]
         loss += (STYLE_WEIGHT / len(styleLayerNames)) * styleLoss(styleOutput, genStyleOutput)   #TODO: implement.
-    loss += TOTAL_VARIATION_WEIGHT * totalLoss(K.variable(tData))   #TODO: implement.
+    loss += TOTAL_VARIATION_WEIGHT * totalLoss(genTensor)   #TODO: implement.
     # TODO: Setup gradients or use K.gradients().
-    output = [loss]
-    output += K.gradients(loss, genTensor)
+    outputs = [loss]
+    outputs += K.gradients(loss, genTensor)
     print("   Beginning transfer.")
 
-    x = np.random.uniform(0, 255, (1, CONTENT_IMG_H , CONTENT_IMG_W, 3)) - 128.
+    x = np.random.uniform(0, 255, (1, CONTENT_IMG_H , CONTENT_IMG_W, TRANSFER_ROUNDS)) - 128.
+
+    def evaluate_loss_and_gradients(x):
+        x = x.reshape((1, CONTENT_IMG_H, CONTENT_IMG_W, TRANSFER_ROUNDS))
+        outs = K.function([genTensor], outputs)([x])
+        loss = outs[0]
+        gradients = outs[1].flatten().astype("float64")
+        return loss, gradients
+
+    class Evaluator:
+
+        def loss(self, x):
+            loss, gradients = evaluate_loss_and_gradients(x)
+            self._gradients = gradients
+            return loss
+
+        def gradients(self, x):
+            return self._gradients
+
+    evaluator = Evaluator()
+
     for i in range(TRANSFER_ROUNDS):
         print("   Step %d." % i)
         #TODO: perform gradient descent using fmin_l_bfgs_b.
@@ -165,7 +167,7 @@ def styleTransfer(cData, sData, tData):
         print("      Loss: %f." % tLoss)
         img = deprocessImage(x)
         saveFile = "output.png"   #TODO: Implement.
-        #imsave(saveFile, img)   #Uncomment when everything is working right.
+        imsave(saveFile, img)   #Uncomment when everything is working right.
         print("      Image saved to \"%s\"." % saveFile)
     print("   Transfer complete.")
 
