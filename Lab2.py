@@ -33,7 +33,7 @@ CONTENT_WEIGHT = 0.3    # Alpha weight.
 STYLE_WEIGHT = 1.0     # Beta weight.
 TOTAL_WEIGHT = 1.0
 
-TRANSFER_ROUNDS = 1000
+TRANSFER_ROUNDS = 100
 
 
 
@@ -63,17 +63,17 @@ def gramMatrix(x):
 #========================<Loss Function Builder Functions>======================
 
 def styleLoss(style, gen):
-    return K.sum(K.square(gramMatrix(style) - gramMatrix(gen))) / (4. * (TRANSFER_ROUNDS ** 2) * ((STYLE_IMG_H* STYLE_IMG_W) ** 2))
+    return K.sum(K.square(gramMatrix(style) - gramMatrix(gen))) / (4. * (3 ** 2) * ((STYLE_IMG_H* STYLE_IMG_W) ** 2))
 
 def contentLoss(content, gen):
     return K.sum(K.square(gen - content))
 
 
 def totalLoss(x):
-    # a = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, 1:, :CONTENT_IMG_W - 1, :])
-    # b = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, :CONTENT_IMG_W - 1, 1:, :])
-    # return K.sum(K.pow(a + b, TOTAL_VARIATION_LOSS_FACTOR))
-    return TOTAL_WEIGHT * x  #TODO: implement.
+    a = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, 1:, :CONTENT_IMG_W - 1, :])
+    b = K.square(x[:, :CONTENT_IMG_H - 1, :CONTENT_IMG_W - 1, :] - x[:, :CONTENT_IMG_W - 1, 1:, :])
+    return K.sum(K.pow(a + b, TOTAL_WEIGHT))
+    # return TOTAL_WEIGHT * x  #TODO: implement.
 
 
 
@@ -102,10 +102,10 @@ def preprocessData(raw):
     img = img.astype("float64")
     img = np.expand_dims(img, axis=0)
     # normalize the image
-    img[:, :, :, 2] -= IMAGENET_MEAN_RGB_VALUES[0]
-    img[:, :, :, 1]  -= IMAGENET_MEAN_RGB_VALUES[1]
-    img[:, :, :, 0]  -= IMAGENET_MEAN_RGB_VALUES[2]
-    img = img[:, :, :, ::-1]
+    # img[:, :, :, 2] -= IMAGENET_MEAN_RGB_VALUES[0]
+    # img[:, :, :, 1]  -= IMAGENET_MEAN_RGB_VALUES[1]
+    # img[:, :, :, 0]  -= IMAGENET_MEAN_RGB_VALUES[2]
+    # img = img[:, :, :, ::-1]
     # print (img)
     img = vgg19.preprocess_input(img)
     return img
@@ -141,7 +141,7 @@ def styleTransfer(cData, sData, tData):
         styleOutput = styleLayer[1, :, :, :]
         genStyleOutput = styleLayer[2, :, :, :]
         loss += (STYLE_WEIGHT / len(styleLayerNames)) * styleLoss(styleOutput, genStyleOutput)   #TODO: implement.
-    loss += totalLoss(loss)   #TODO: implement.
+    loss += totalLoss(genTensor)   #TODO: implement.
     # TODO: Setup gradients or use K.gradients().
     outputs = [loss]
     outputs += K.gradients(loss, genTensor)
